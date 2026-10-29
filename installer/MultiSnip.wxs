@@ -33,10 +33,38 @@
     <MajorUpgrade AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer version of MultiSnip is already installed. Remove it first to install this version." />
 
-    <!-- OCR nutzt Windows.Media.Ocr, das braucht mindestens Windows 10 1809. -->
+    <!-- OCR nutzt Windows.Media.Ocr, das braucht mindestens Windows 10 1809.
+         VersionNT und WindowsBuild taugen dafuer nicht: der Installer-Dienst hat
+         kein Windows-10-Manifest, darum meldet GetVersionEx dort 603 / 9600 -
+         also Windows 8.1 - und zwar auf jedem Windows 10 und 11. Die Registry
+         wird nicht geschoent und ist die verlaessliche Quelle. -->
+    <Property Id="WINVERMAJOR">
+      <RegistrySearch Id="SearchWinVerMajor" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentMajorVersionNumber" Type="raw" Win64="$(var.Win64Flag)" />
+    </Property>
+    <Property Id="WINBUILDNUMBER">
+      <RegistrySearch Id="SearchWinBuildNumber" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" Win64="$(var.Win64Flag)" />
+    </Property>
+
+    <!-- CurrentMajorVersionNumber gibt es erst ab Windows 10, damit faellt alles
+         Aeltere schon hier raus. CurrentBuildNumber ist REG_SZ, der Vergleich ist
+         also textuell; ab Windows 10 sind alle Builds fuenfstellig, darum stimmt
+         die Reihenfolge trotzdem. -->
     <Condition Message="MultiSnip requires Windows 10 version 1809 (build 17763) or newer.">
-      <![CDATA[Installed OR (VersionNT >= 603 AND WindowsBuild >= 17763)]]>
+      <![CDATA[Installed OR (WINVERMAJOR AND WINBUILDNUMBER >= "17763")]]>
     </Condition>
+
+    <!-- LaunchConditions liegt von Haus aus vor AppSearch und saehe die beiden
+         Properties sonst nie. -->
+    <InstallUISequence>
+      <LaunchConditions After="AppSearch" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <LaunchConditions After="AppSearch" />
+    </InstallExecuteSequence>
 
     <!-- Die EXE liegt im Tray und haelt sich selbst beim Schliessen am Leben,
          darum wird ein laufender Prozess vor dem Ersetzen beendet. -->

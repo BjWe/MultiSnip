@@ -49,8 +49,8 @@
 
     <Icon Id="MultiSnipIcon" SourceFile="$(var.IconSource)" />
     <Property Id="ARPPRODUCTICON" Value="MultiSnipIcon" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/bjwe/multisnip" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/bjwe/multisnip/issues" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/BjWe/MultiSnip" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/BjWe/MultiSnip/issues" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="$(var.ProgramFilesDir)">

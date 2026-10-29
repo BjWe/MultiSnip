@@ -6,7 +6,7 @@ lassen sich als ein Gesamtbild kopieren oder als PNG speichern.
 
 ## Installieren
 
-Fertige Pakete liegen unter [Releases](https://github.com/bjwe/multisnip/releases):
+Fertige Pakete liegen unter [Releases](https://github.com/BjWe/MultiSnip/releases):
 
 | Datei | Wofür |
 |---|---|
@@ -165,7 +165,7 @@ eine weitere Sprache ist eine zusätzliche Spalte plus ein Eintrag im Auswahlsch
 ## Lizenz
 
 MultiSnip ist freie Software unter der MIT-Lizenz (siehe `LICENSE`).
-Quellcode: https://github.com/bjwe/multisnip
+Quellcode: https://github.com/BjWe/MultiSnip
 
 ## Quellstruktur
 

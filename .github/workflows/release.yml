@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
@@ -39,7 +39,7 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: MSBuild bereitstellen
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: EXE und MSI fuer x64 und x86 bauen
         shell: pwsh

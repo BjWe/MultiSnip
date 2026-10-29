@@ -34,9 +34,17 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# PowerShell 7 bricht sonst von sich aus ab, sobald ein aufgerufenes Programm
+# einen Exit-Code != 0 liefert - dann kaemen wir nie dazu, die Fehlerzeilen
+# aus dem Log einzusammeln und auszugeben.
+if (Test-Path 'variable:PSNativeCommandUseErrorActionPreference') {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ToolsDir = Join-Path $RepoRoot 'build\.tools\wix3'
 $ObjDir   = Join-Path $RepoRoot 'build\msi-obj'
+$LogDir   = Join-Path $ObjDir 'logs'
 $DistDir  = Join-Path $RepoRoot 'dist'
 
 $WixVersion = 'wix3141rtm'
@@ -52,19 +60,51 @@ function Get-AppVersion {
 
 function Get-MSBuildPath {
     if ($env:MSBUILD_PATH -and (Test-Path $env:MSBUILD_PATH)) { return $env:MSBUILD_PATH }
-    if (Get-Command msbuild.exe -ErrorAction SilentlyContinue) { return 'msbuild.exe' }
 
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (-not (Test-Path $vswhere)) {
-        throw 'Weder msbuild.exe im PATH noch vswhere.exe gefunden. Visual Studio mit C++-Workload wird gebraucht.'
+    if (Test-Path $vswhere) {
+        $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($vsPath) {
+            $msbuild = Join-Path $vsPath 'MSBuild\Current\Bin\MSBuild.exe'
+            if (Test-Path $msbuild) { return $msbuild }
+        }
     }
-    $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    if (-not $vsPath) {
-        throw 'Keine Visual-Studio-Installation mit C++-Buildtools gefunden.'
+
+    $onPath = Get-Command msbuild.exe -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+
+    throw 'Keine MSBuild.exe gefunden. Visual Studio mit C++-Workload wird gebraucht.'
+}
+
+# Ruft ein Programm auf, schreibt die Ausgabe mit ins Log und macht aus einem
+# Fehlschlag in GitHub Actions eine Annotation - die ist am Lauf sichtbar, ohne
+# dass man sich durch das Log klicken muss.
+function Invoke-BuildTool {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Arguments
+    )
+
+    $log = Join-Path $LogDir "$Label.log"
+    # 2>&1 holt die Fehlerausgabe in die Pipeline, damit sie im Log landet und
+    # nicht ueber $ErrorActionPreference das Skript abraeumt.
+    & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $log | ForEach-Object { Write-Host $_ }
+    $exit = $LASTEXITCODE
+    if ($exit -eq 0) { return }
+
+    $lines = @(Get-Content -LiteralPath $log |
+        Where-Object { $_ -match '(?i)\b(error|fatal error)\b' } |
+        Select-Object -First 8)
+    if (-not $lines) {
+        $lines = @(Get-Content -LiteralPath $log | Where-Object { $_.Trim() } | Select-Object -Last 8)
     }
-    $msbuild = Join-Path $vsPath 'MSBuild\Current\Bin\MSBuild.exe'
-    if (-not (Test-Path $msbuild)) { throw "MSBuild.exe nicht unter $msbuild gefunden." }
-    return $msbuild
+    if ($env:GITHUB_ACTIONS) {
+        foreach ($l in $lines) {
+            Write-Host ("::error title={0}::{1}" -f $Label, ($l -replace '\s+', ' ').Trim())
+        }
+    }
+    throw "$Label ist mit Exit-Code $exit abgebrochen (Log: $log)."
 }
 
 function Install-WixToolset {
@@ -84,11 +124,11 @@ function Install-WixToolset {
 if (-not $Version) { $Version = Get-AppVersion }
 Write-Host "MultiSnip $Version" -ForegroundColor Green
 
+New-Item -ItemType Directory -Force -Path $ObjDir, $LogDir, $DistDir | Out-Null
+
 Install-WixToolset
 $candle = Join-Path $ToolsDir 'candle.exe'
 $light  = Join-Path $ToolsDir 'light.exe'
-
-New-Item -ItemType Directory -Force -Path $ObjDir, $DistDir | Out-Null
 
 foreach ($plat in $Platform) {
     # Die Solution nennt die 32-Bit-Plattform x86, die Ausgabe landet unter Win32.
@@ -97,7 +137,6 @@ foreach ($plat in $Platform) {
 
     if (-not $SkipBuild) {
         Write-Host "MSBuild: $Configuration|$plat" -ForegroundColor Cyan
-        $msbuild = Get-MSBuildPath
         $msbuildArgs = @(
             (Join-Path $RepoRoot 'MultiSnip.sln')
             '-nologo'
@@ -107,8 +146,7 @@ foreach ($plat in $Platform) {
             "-p:Platform=$plat"
         )
         if ($PlatformToolset) { $msbuildArgs += "-p:PlatformToolset=$PlatformToolset" }
-        & $msbuild @msbuildArgs
-        if ($LASTEXITCODE -ne 0) { throw "MSBuild ist fuer $plat mit $LASTEXITCODE abgebrochen." }
+        Invoke-BuildTool -Label "msbuild-$plat" -FilePath (Get-MSBuildPath) -Arguments $msbuildArgs
     }
 
     if (-not (Test-Path $exePath)) { throw "EXE nicht gefunden: $exePath" }
@@ -117,34 +155,34 @@ foreach ($plat in $Platform) {
     $msi    = Join-Path $DistDir "MultiSnip-$Version-$plat.msi"
 
     Write-Host "candle: $plat" -ForegroundColor Cyan
-    & $candle `
-        -nologo `
-        -arch $plat `
-        "-dVersion=$Version" `
-        "-dPlatform=$plat" `
-        "-dExeSource=$exePath" `
-        "-dIconSource=$(Join-Path $RepoRoot 'src\app.ico')" `
-        "-dLicenseSource=$(Join-Path $RepoRoot 'LICENSE')" `
-        "-dReadmeSource=$(Join-Path $RepoRoot 'README.md')" `
-        "-dLicenseRtfSource=$(Join-Path $PSScriptRoot 'License.rtf')" `
-        -ext WixUIExtension `
-        -ext WixUtilExtension `
-        -out $wixobj `
+    Invoke-BuildTool -Label "candle-$plat" -FilePath $candle -Arguments @(
+        '-nologo'
+        '-arch', $plat
+        "-dVersion=$Version"
+        "-dPlatform=$plat"
+        "-dExeSource=$exePath"
+        "-dIconSource=$(Join-Path $RepoRoot 'src\app.ico')"
+        "-dLicenseSource=$(Join-Path $RepoRoot 'LICENSE')"
+        "-dReadmeSource=$(Join-Path $RepoRoot 'README.md')"
+        "-dLicenseRtfSource=$(Join-Path $PSScriptRoot 'License.rtf')"
+        '-ext', 'WixUIExtension'
+        '-ext', 'WixUtilExtension'
+        '-out', $wixobj
         (Join-Path $PSScriptRoot 'MultiSnip.wxs')
-    if ($LASTEXITCODE -ne 0) { throw "candle ist fuer $plat mit $LASTEXITCODE abgebrochen." }
+    )
 
     Write-Host "light: $plat" -ForegroundColor Cyan
-    & $light `
-        -nologo `
-        -ext WixUIExtension `
-        -ext WixUtilExtension `
-        -cultures:en-us `
-        -sice:ICE61 `
-        -sice:ICE69 `
-        -out $msi `
-        -pdbout (Join-Path $ObjDir "MultiSnip-$plat.wixpdb") `
+    Invoke-BuildTool -Label "light-$plat" -FilePath $light -Arguments @(
+        '-nologo'
+        '-ext', 'WixUIExtension'
+        '-ext', 'WixUtilExtension'
+        '-cultures:en-us'
+        '-sice:ICE61'
+        '-sice:ICE69'
+        '-out', $msi
+        '-pdbout', (Join-Path $ObjDir "MultiSnip-$plat.wixpdb")
         $wixobj
-    if ($LASTEXITCODE -ne 0) { throw "light ist fuer $plat mit $LASTEXITCODE abgebrochen." }
+    )
 
     $size = [math]::Round((Get-Item $msi).Length / 1KB)
     Write-Host "fertig: $msi ($size KB)" -ForegroundColor Green

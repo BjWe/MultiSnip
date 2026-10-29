@@ -205,6 +205,20 @@ static const wchar_t* kStr[S__COUNT][3] = {
     /* S_AC_SET_FMT  */ { L"Nach dem Snip kopieren: %s", L"Copy after snip: %s", L"Copiar tras el recorte: %s" },
     /* S_AC_DONE_SNIP */ { L"   ·   in die Zwischenablage kopiert", L"   ·   copied to clipboard", L"   ·   copiado al portapapeles" },
     /* S_AC_DONE_TAB */ { L"   ·   Gesamtbild (%d × %d px) in die Zwischenablage kopiert", L"   ·   composite (%d × %d px) copied to clipboard", L"   ·   imagen completa (%d × %d px) copiada al portapapeles" },
+    /* S_SET_NUMSCOPE */ { L"Nummern zählen", L"Number counting", L"Conteo de números" },
+    /* S_SET_NUMSCOPE_D */ {
+        L"Vorgabe für neue Tabs: zählt das Nummern-Werkzeug je Ausschnitt neu oder durch den ganzen Tab.",
+        L"Default for new tabs: whether the number tool restarts per snippet or counts through the whole tab.",
+        L"Predeterminado para pestañas nuevas: si la herramienta de números reinicia en cada recorte o cuenta en toda la pestaña." },
+    /* S_TAB_NUMSCOPE */ { L"Nummern zählen", L"Number counting", L"Conteo de números" },
+    /* S_NS_SNIP */ { L"Pro Ausschnitt", L"Per snippet", L"Por recorte" },
+    /* S_NS_TAB */ { L"Pro Tab", L"Per tab", L"Por pestaña" },
+    /* S_ED_NUM_NEXT */ { L"Nächste Nummer", L"Next number", L"Siguiente número" },
+    /* S_ED_NUM_SEL */ { L"Nummer", L"Number", L"Número" },
+    /* S_ED_NUM_HINT */ {
+        L"Nummer ändern – auch mit + und − auf der Tastatur",
+        L"Change the number – + and − on the keyboard work too",
+        L"Cambiar el número: también con + y − en el teclado" },
 };
 
 static Lang g_sel = Lang::Auto;

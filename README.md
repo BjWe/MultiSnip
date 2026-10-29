@@ -116,7 +116,7 @@ die Formen liegen in `<png>.ann.ini` und werden in Vorschau, Zwischenablage und 
 | Linie / Pfeil | `L` / `A` | `Umschalt` rastet auf 0°, 45°, 90° |
 | Rechteck / Ellipse | `R` / `E` | `Umschalt` erzwingt Quadrat / Kreis |
 | Text | `T` | klicken, tippen (`Strg+V` fügt eine Zeile ein), `Enter` übernimmt, `Esc` verwirft |
-| Nummer | `N` | fortlaufender Zähler pro Ausschnitt |
+| Nummer | `N` | fortlaufender Zähler. Der Spinner in der Editor-Leiste stellt die nächste Nummer ein; ist eine Marke ausgewählt, ändert er deren Nummer (`+` / `−` auf der Tastatur ebenso). Ob je Ausschnitt oder durch den ganzen Tab gezählt wird, steht pro Tab in den Einstellungen |
 | Zuschneiden | `C` | Rechteck aufziehen; der Editor zeigt immer das ganze Bild, der Bereich außerhalb ist abgedunkelt. Ebenen liegen auf dem ungecroppten Bild und werden am Zuschnittrand abgeschnitten |
 
 Der Name des Werkzeugs unter dem Mauszeiger erscheint in der Statuszeile. Rechteck und Ellipse
@@ -131,10 +131,12 @@ Doppelklick benennt um. Gezeichnet wird immer in der markierten Ebene.
 mitschleppen; ein Ordner aus älteren Versionen unter `%AppData%` wird beim ersten Start verschoben).
 
 - `MultiSnip.ini` – `[Defaults]` (Füllfarbe, Paddings, Verzögerung, Mauszeiger, Hotkey,
-  Dashboard, Lösch-Nachfrage, Sprache) und `[State]` (letzter Tab, Fensterposition).
+  Dashboard, Lösch-Nachfrage, Sprache, Nummern-Zählbereich) und `[State]` (letzter Tab,
+  Fensterposition).
 - Pro Tab ein Ordner mit GUID-Namen: `tab.ini` (Titel, Reihenfolge, Farbe, Paddings, Verzögerung,
-  Scroll, Snippet-Liste mit Datei/Sichtbarkeit/Position) plus die PNG-Dateien. Ein neuer Tab
-  erbt Farbe, Paddings und Verzögerung aus `[Defaults]` und lebt danach eigenständig.
+  Nummern-Zählbereich, Scroll, Snippet-Liste mit Datei/Sichtbarkeit/Position) plus die
+  PNG-Dateien. Ein neuer Tab erbt Farbe, Paddings, Verzögerung und Zählbereich aus `[Defaults]`
+  und lebt danach eigenständig.
 
 Alle INI-Dateien sind UTF-16 und werden atomar (tmp + rename) in einem Zug geschrieben, PNGs ebenso.
 Beim Start werden nur Metadaten und PNG-Größen gelesen; die Bilder selbst lädt die App nur für den

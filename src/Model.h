@@ -49,6 +49,7 @@ struct Tab {
     int padY = 8;
     int delayMs = 0;            // Verzoegerung vor dem Einfrieren (pro Tab)
     int autoCopy = 0;           // nach der Aufnahme kopieren: 0 = nichts, 1 = neuer Ausschnitt, 2 = Gesamtbild des Tabs
+    int numberScope = 0;        // Nummern-Werkzeug zaehlt: 0 = pro Ausschnitt, 1 = durch den ganzen Tab
     int scroll = 0;             // Scroll-Offset (Pixel)
     int scrollX = 0;            // horizontaler Scroll-Offset (nur Laufzeit)
     bool loaded = false;        // Bitmaps der Snippets sind im Speicher (nur der aktive Tab)
@@ -66,6 +67,7 @@ struct Defaults {
     int padY = 8;
     int delayMs = 0;
     int autoCopy = 0;           // Vorgabe fuer neue Tabs (siehe Tab::autoCopy)
+    int numberScope = 0;        // Vorgabe fuer neue Tabs (siehe Tab::numberScope)
     bool captureCursor = false;
     UINT hotMod = MOD_CONTROL;  // Strg+Druck: kollidiert nicht mit "Speichern unter" (Strg+Umschalt+S)
     UINT hotVk = VK_SNAPSHOT;

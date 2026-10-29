@@ -266,6 +266,7 @@ static void LoadGlobal()
     o.padY = Clamp(f.GetInt(L"Defaults", L"PadY", d.padY), 0, 500);
     o.delayMs = Clamp(f.GetInt(L"Defaults", L"DelayMs", d.delayMs), 0, 30000);
     o.autoCopy = Clamp(f.GetInt(L"Defaults", L"AutoCopy", d.autoCopy), 0, 2);
+    o.numberScope = Clamp(f.GetInt(L"Defaults", L"NumberScope", d.numberScope), 0, 1);
     o.captureCursor = f.GetInt(L"Defaults", L"CaptureCursor", d.captureCursor) != 0;
     o.hotMod = (UINT)f.GetInt(L"Defaults", L"HotkeyMod", (int)d.hotMod) & (MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_WIN);
     o.hotVk = (UINT)f.GetInt(L"Defaults", L"HotkeyKey", (int)d.hotVk);
@@ -300,6 +301,7 @@ static std::unique_ptr<Tab> LoadTab(const std::wstring& guid)
     t->padY = Clamp(f.GetInt(L"Tab", L"PadY", g_app.def.padY), 0, 500);
     t->delayMs = Clamp(f.GetInt(L"Tab", L"DelayMs", g_app.def.delayMs), 0, 30000);
     t->autoCopy = Clamp(f.GetInt(L"Tab", L"AutoCopy", g_app.def.autoCopy), 0, 2);
+    t->numberScope = Clamp(f.GetInt(L"Tab", L"NumberScope", g_app.def.numberScope), 0, 1);
     t->scroll = std::max(0, f.GetInt(L"Tab", L"Scroll", 0));
 
     int count = Clamp(f.GetInt(L"Snippets", L"Count", 0), 0, 100000);
@@ -397,6 +399,7 @@ bool Model_SaveGlobal()
     w.SetInt(L"Defaults", L"PadY", d.padY);
     w.SetInt(L"Defaults", L"DelayMs", d.delayMs);
     w.SetInt(L"Defaults", L"AutoCopy", d.autoCopy);
+    w.SetInt(L"Defaults", L"NumberScope", d.numberScope);
     w.SetInt(L"Defaults", L"CaptureCursor", d.captureCursor ? 1 : 0);
     w.SetInt(L"Defaults", L"HotkeyMod", (int)d.hotMod);
     w.SetInt(L"Defaults", L"HotkeyKey", (int)d.hotVk);
@@ -429,6 +432,7 @@ bool Model_SaveTab(const Tab& t)
     w.SetInt(L"Tab", L"PadY", t.padY);
     w.SetInt(L"Tab", L"DelayMs", t.delayMs);
     w.SetInt(L"Tab", L"AutoCopy", t.autoCopy);
+    w.SetInt(L"Tab", L"NumberScope", t.numberScope);
     w.SetInt(L"Tab", L"Scroll", t.scroll);
     w.SetInt(L"Snippets", L"Count", (int)t.snippets.size());
     for (size_t i = 0; i < t.snippets.size(); i++) {
@@ -471,6 +475,7 @@ Tab* Model_NewTab()
     t->padY = g_app.def.padY;
     t->delayMs = g_app.def.delayMs;
     t->autoCopy = g_app.def.autoCopy;
+    t->numberScope = g_app.def.numberScope;
     t->loaded = true;                           // leer, also vollstaendig "geladen"
     Tab* raw = t.get();
     g_app.tabs.push_back(std::move(t));

@@ -114,17 +114,17 @@ enum class Page { Main, Settings, About, Edit };
 #define WIDEN2(x) L##x
 #define WIDEN(x) WIDEN2(x)
 static const wchar_t* kAppVersion = WIDEN(APP_VERSION_STR);
-static const wchar_t* kGitHubUrl = L"https://github.com/bjwe/multisnip";
+static const wchar_t* kGitHubUrl = L"https://github.com/BjWe/MultiSnip";
 
 enum class HK {
     None, Tab, TabClose, TabAdd, Dash,
     Snip, SnipDelay, Copy, Save, Rename, Settings,
     ZoomOut, ZoomIn, ZoomReset,
     SChk, SDel, SRep, SBody, SCopy, SOcr, DashNew,
-    SetBack, SetToggle, SetMinus, SetPlus, SetColor, SetHotkey, SetResetAsk, SetLang, SetAutoCopy,
+    SetBack, SetToggle, SetMinus, SetPlus, SetColor, SetHotkey, SetResetAsk, SetLang, SetAutoCopy, SetNumScope,
     About, AboutGitHub,
     SEdit, Canvas, Tool, Color, Width, Undo, Redo, EdDone, EdDeleteSel,
-    LayerSel, LayerVis, LayerAdd, LayerDel, LayerUp, LayerDown, EdCropReset,
+    LayerSel, LayerVis, LayerAdd, LayerDel, LayerUp, LayerDown, EdCropReset, EdNumMinus, EdNumPlus,
     ScrollThumb, ScrollTrack, ScrollHThumb, ScrollHTrack, TabMore, SetTheme
 };
 struct Zone { RECT r; HK kind; int a; };
@@ -1051,6 +1051,20 @@ static void SetAutoCopyCtl(HDC dc, const RECT& card, int base, int value)
     }
 }
 
+static const wchar_t* NumScopeName(int v) { return v == 1 ? TR(S_NS_TAB) : TR(S_NS_SNIP); }
+static void SetNumScopeCtl(HDC dc, const RECT& card, int base, int value)
+{
+    int cy = (card.top + card.bottom) / 2;
+    int right = card.right - S(16);
+    for (int i = 1; i >= 0; i--) {
+        int w = TextWidth(dc, g_font, NumScopeName(i)) + S(22);
+        RECT r{ right - w, cy - S(16), right, cy + S(16) };
+        DrawButton(dc, r, nullptr, NumScopeName(i), IsHot(HK::SetNumScope, base + i), value == i ? BtnStyle::Accent : BtnStyle::Subtle);
+        Zone_Add(r, HK::SetNumScope, base + i);
+        right = r.left - S(4);
+    }
+}
+
 static int g_setScroll = 0;      // Scroll-Offset der Einstellungsseite
 static int g_setContentH = 0;
 
@@ -1111,6 +1125,8 @@ static void DrawSettings(HDC dc, const RECT& rc)
     SetSpinner(dc, c, SET_DELAY, DelayText(d.delayMs));
     c = SetCard(dc, y, ICO_COPY, TR(S_SET_AUTOCOPY), TR(S_SET_AUTOCOPY_D));
     SetAutoCopyCtl(dc, c, 0, d.autoCopy);
+    c = SetCard(dc, y, ICO_EDIT, TR(S_SET_NUMSCOPE), TR(S_SET_NUMSCOPE_D));
+    SetNumScopeCtl(dc, c, 0, d.numberScope);
     c = SetCard(dc, y, ICO_MOUSE, TR(S_SET_CURSOR), TR(S_SET_CURSOR_D));
     SetToggleCtl(dc, c, SET_CURSOR, d.captureCursor);
     {
@@ -1153,6 +1169,8 @@ static void DrawSettings(HDC dc, const RECT& rc)
         SetSpinner(dc, c, SET_TAB_DELAY, DelayText(t->delayMs));
         c = SetCard(dc, y, ICO_COPY, TR(S_TAB_AUTOCOPY), TR(S_TAB_ONLY));
         SetAutoCopyCtl(dc, c, 10, t->autoCopy);
+        c = SetCard(dc, y, ICO_EDIT, TR(S_TAB_NUMSCOPE), TR(S_TAB_ONLY));
+        SetNumScopeCtl(dc, c, 10, t->numberScope);
     }
     y += S(4);
     RECT fr{ S(32), y, S(32) + g_setCardW, y + S(24) };
@@ -1379,6 +1397,30 @@ static void EdSave()
     Snippet* s = EdSnip();
     if (t && s) Model_SaveAnnot(*t, *s);
 }
+// Hoechste bereits vergebene Nummer - je nach Tab-Einstellung nur in diesem
+// Ausschnitt oder ueber alle Ausschnitte des Tabs.
+static int MaxNumber(const Tab& t, const Snippet& s)
+{
+    int m = 0;
+    auto scan = [&m](const Snippet& sn) {
+        for (auto& L : sn.layers)
+            for (auto& sh : L.shapes)
+                if (sh.type == ShapeType::Number) m = std::max(m, sh.number);
+    };
+    if (t.numberScope == 1) { for (auto& p : t.snippets) scan(*p); }
+    else scan(s);
+    return m;
+}
+// Nummer, die die naechste Marke bekommt. Wird nach jeder Aenderung aus dem
+// Bestand neu berechnet; der Spinner in der Werkzeugleiste darf sie bis zum
+// naechsten Setzen ueberschreiben.
+static int g_edNumNext = 1;
+static void EdNumRefresh()
+{
+    Tab* t = CurTab();
+    Snippet* s = EdSnip();
+    g_edNumNext = (t && s) ? MaxNumber(*t, *s) + 1 : 1;
+}
 static void PushUndo()
 {
     Snippet* s = EdSnip();
@@ -1395,6 +1437,7 @@ static void EdUndo()
     s->layers = g_undo.back();
     g_undo.pop_back();
     g_edSel = -1; g_edTextActive = false; g_edTextIdx = -1;
+    EdNumRefresh();
     EdSave();
     Redraw();
 }
@@ -1406,6 +1449,7 @@ static void EdRedo()
     s->layers = g_redo.back();
     g_redo.pop_back();
     g_edSel = -1; g_edTextActive = false; g_edTextIdx = -1;
+    EdNumRefresh();
     EdSave();
     Redraw();
 }
@@ -1479,6 +1523,7 @@ static void OpenEditor(int idx)
     g_edTextActive = false; g_edTextIdx = -1;
     g_editLayer = -1;
     g_undo.clear(); g_redo.clear();
+    EdNumRefresh();
     g_page = Page::Edit;
     EdFitZoom();
     Redraw();
@@ -1501,18 +1546,21 @@ static AnnPoint ToImg(POINT p)
     a.y = (float)((p.y - g_edOy) / g_edZoom);
     return a;
 }
-static int NextNumber(const Snippet& s)
-{
-    int m = 0;
-    for (auto& L : s.layers) for (auto& sh : L.shapes) if (sh.type == ShapeType::Number) m = std::max(m, sh.number);
-    return m + 1;
-}
 static Shape* EdSelShape()
 {
     Layer* L = EdLayer();
     if (!L || g_edSel < 0 || g_edSel >= (int)L->shapes.size()) return nullptr;
     return &L->shapes[g_edSel];
 }
+// Der Nummern-Spinner in der Werkzeugleiste gilt fuer die ausgewaehlte Marke,
+// sonst fuer die naechste zu setzende.
+static bool EdNumSelected()
+{
+    Shape* sh = EdSelShape();
+    return sh && sh->type == ShapeType::Number;
+}
+static bool EdNumActive() { return EdNumSelected() || g_tool == Tool::Number; }
+
 static void EdDeleteSelected()
 {
     Layer* L = EdLayer();
@@ -1520,6 +1568,7 @@ static void EdDeleteSelected()
     PushUndo();
     L->shapes.erase(L->shapes.begin() + g_edSel);
     g_edSel = -1;
+    EdNumRefresh();
     EdSave();
     Redraw();
 }
@@ -1547,6 +1596,8 @@ static void DrawEdStatus(HDC dc, int cw, int ch)
         : g_flash;
     if (g_flash.empty() && g_hoverKind == HK::Tool && g_hoverA >= 0 && g_hoverA < kToolCount)
         hint = std::wstring(TR(kTools[g_hoverA].name)) + L"   (" + kTools[g_hoverA].key + L")";
+    if (g_flash.empty() && (g_hoverKind == HK::EdNumMinus || g_hoverKind == HK::EdNumPlus))
+        hint = TR(S_ED_NUM_HINT);
     DrawIcon(dc, MakeRect(S(10), bar.top, S(34), ch), g_flash.empty() ? ICO_INFO : ICO_ACCEPT, g_flash.empty() ? CLR_TEXT2 : CLR_ACCENT, g_fontIconS);
     DrawTextIn(dc, MakeRect(S(38), bar.top, cw - S(220), ch), hint, g_font, CLR_TEXT2, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     int y = bar.top + S(3), h = S(24);
@@ -1632,6 +1683,24 @@ static void DrawEditor(HDC dc, int cw, int ch)
             DrawButton(dc, cr, ICO_SNIP, TR(S_CROP_RESET), IsHot(HK::EdCropReset), BtnStyle::Subtle);
             Zone_Add(cr, HK::EdCropReset);
             x = cr.right + S(8);
+        }
+        if (EdNumActive()) {
+            bool onSel = EdNumSelected();
+            int val = onSel ? EdSelShape()->number : std::max(1, g_edNumNext);
+            const wchar_t* lab = onSel ? TR(S_ED_NUM_SEL) : TR(S_ED_NUM_NEXT);
+            int lw = TextWidth(dc, g_font, lab) + S(8);
+            DrawTextIn(dc, MakeRect(x, y, x + lw, y + S(32)), lab, g_font, CLR_TEXT2, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            RECT nm{ x + lw, y, x + lw + S(28), y + S(32) };
+            RECT nv{ nm.right + S(2), y, nm.right + S(2) + S(44), y + S(32) };
+            RECT np{ nv.right + S(2), y, nv.right + S(2) + S(28), y + S(32) };
+            DrawButton(dc, nm, ICO_MINUS, L"", IsHot(HK::EdNumMinus), BtnStyle::Subtle, val > 1);
+            DrawRoundBox(dc, nv, CLR_CARD, CLR_STROKE2, S(4));
+            FillSolid(dc, MakeRect(nv.left + S(4), nv.bottom - 1, nv.right - S(4), nv.bottom), CLR_STROKE3);
+            DrawTextIn(dc, nv, std::to_wstring(val), g_font, CLR_TEXT, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DrawButton(dc, np, ICO_ADD, L"", IsHot(HK::EdNumPlus), BtnStyle::Subtle);
+            if (val > 1) Zone_Add(nm, HK::EdNumMinus);
+            Zone_Add(np, HK::EdNumPlus);
+            x = np.right + S(8);
         }
     }
     {
@@ -1809,9 +1878,10 @@ static void EdCanvasDown(POINT p)
     case Tool::Number: {
         PushUndo();
         Shape sh; sh.type = ShapeType::Number; sh.color = g_annColor; sh.width = g_annWidth; sh.pts = { ip };
-        sh.number = NextNumber(*s);
+        sh.number = std::max(1, g_edNumNext);
         L->shapes.push_back(sh);
         g_edSel = (int)L->shapes.size() - 1;
+        EdNumRefresh();
         EdSave();
         Redraw();
         return;
@@ -1936,6 +2006,21 @@ static void EdApplyStyleToSelection()
     }
 }
 
+// Aendert die Nummer der Auswahl, sonst die der naechsten Marke.
+static void EdNumAdjust(int d)
+{
+    if (EdNumSelected()) {
+        int nv = std::max(1, EdSelShape()->number + d);
+        if (nv != EdSelShape()->number) {
+            PushUndo();
+            EdSelShape()->number = nv;
+            EdSave();
+        }
+    }
+    else g_edNumNext = std::max(1, g_edNumNext + d);
+    Redraw();
+}
+
 static bool EdOnLButtonDown(POINT p, const Zone* z)
 {
     if (!z) { if (g_edTextActive) EdCommitText(true); return true; }
@@ -1986,6 +2071,8 @@ static bool EdOnLButtonDown(POINT p, const Zone* z)
     case HK::EdCropReset:
         if (Tab* t = CurTab()) { s->crop = RECT{}; s->FreeCache(); Model_SaveTab(*t); Flash(TR(S_CROP_CLEARED)); Redraw(); }
         break;
+    case HK::EdNumMinus: EdNumAdjust(-1); break;
+    case HK::EdNumPlus:  EdNumAdjust(+1); break;
     default: break;
     }
     return true;
@@ -2004,8 +2091,14 @@ static bool EdOnKeyDown(WPARAM vk, bool ctrl)
     case 'Z': if (ctrl) { EdUndo(); return true; } break;
     case 'Y': if (ctrl) { EdRedo(); return true; } break;
     case '0': case VK_NUMPAD0: if (ctrl) { EdFitZoom(); Redraw(); return true; } break;
-    case VK_ADD: case VK_OEM_PLUS: if (ctrl) { EdSetZoom(g_edZoom * 1.25); return true; } break;
-    case VK_SUBTRACT: case VK_OEM_MINUS: if (ctrl) { EdSetZoom(g_edZoom / 1.25); return true; } break;
+    case VK_ADD: case VK_OEM_PLUS:
+        if (ctrl) { EdSetZoom(g_edZoom * 1.25); return true; }
+        if (EdNumActive()) { EdNumAdjust(+1); return true; }
+        break;
+    case VK_SUBTRACT: case VK_OEM_MINUS:
+        if (ctrl) { EdSetZoom(g_edZoom / 1.25); return true; }
+        if (EdNumActive()) { EdNumAdjust(-1); return true; }
+        break;
     }
     if (!ctrl) {
         for (int i = 0; i < kToolCount; i++) {
@@ -2885,6 +2978,11 @@ static void Activate(const Zone& zc, POINT p, bool kb)
     case HK::SetAutoCopy:
         if (z->a >= 10) { if (Tab* t = CurTab()) { t->autoCopy = z->a - 10; Model_SaveTab(*t); } }
         else { g_app.def.autoCopy = z->a; Model_SaveGlobal(); }
+        Redraw();
+        break;
+    case HK::SetNumScope:
+        if (z->a >= 10) { if (Tab* t = CurTab()) { t->numberScope = z->a - 10; Model_SaveTab(*t); } }
+        else { g_app.def.numberScope = z->a; Model_SaveGlobal(); }
         Redraw();
         break;
     case HK::SetTheme:

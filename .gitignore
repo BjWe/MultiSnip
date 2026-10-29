@@ -1,0 +1,16 @@
+# Build-Ausgaben
+/bin/
+/obj/
+/dist/
+
+# Werkzeuge und Zwischenstaende des MSI-Baus
+/build/.tools/
+/build/msi-obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.aps
+*.VC.db
+*.VC.VC.opendb

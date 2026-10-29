@@ -1,0 +1,29 @@
+#include <windows.h>
+#include "resource.h"
+
+IDI_APP ICON "app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION APP_VERSION_MAJOR,APP_VERSION_MINOR,APP_VERSION_PATCH,0
+ PRODUCTVERSION APP_VERSION_MAJOR,APP_VERSION_MINOR,APP_VERSION_PATCH,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040704b0"
+        BEGIN
+            VALUE "FileDescription", "MultiSnip - stapelndes Snipping-Tool"
+            VALUE "FileVersion", APP_VERSION_STR
+            VALUE "InternalName", "MultiSnip"
+            VALUE "LegalCopyright", "MIT License, Copyright (c) 2026 bjwe"
+            VALUE "OriginalFilename", "MultiSnip.exe"
+            VALUE "ProductName", "MultiSnip"
+            VALUE "ProductVersion", APP_VERSION_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x407, 1200
+    END
+END

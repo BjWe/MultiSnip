@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag, fuer den das Release gebaut wird (z. B. v1.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Version aus Tag und src/resource.h vergleichen
+        id: version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.inputs.tag || github.ref_name }}'
+          $tagVersion = $tag -replace '^v', ''
+          $header = Select-String -Path src/resource.h -Pattern '^\s*#define\s+APP_VERSION_STR\s+"([0-9]+\.[0-9]+\.[0-9]+)"' |
+            Select-Object -First 1
+          $appVersion = $header.Matches[0].Groups[1].Value
+          if ($tagVersion -ne $appVersion) {
+            throw "Tag $tag passt nicht zu APP_VERSION_STR $appVersion in src/resource.h."
+          }
+          "version=$appVersion" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: MSBuild bereitstellen
+        uses: microsoft/setup-msbuild@v2
+
+      - name: EXE und MSI fuer x64 und x86 bauen
+        shell: pwsh
+        run: .\installer\build-msi.ps1 -Platform x64,x86
+
+      - name: Portable EXEs daneben legen
+        shell: pwsh
+        run: |
+          $v = '${{ steps.version.outputs.version }}'
+          Copy-Item bin\x64\Release\MultiSnip.exe   "dist\MultiSnip-$v-x64.exe"
+          Copy-Item bin\Win32\Release\MultiSnip.exe "dist\MultiSnip-$v-x86.exe"
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - name: Release anlegen
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v   = '${{ steps.version.outputs.version }}'
+          $tag = '${{ steps.version.outputs.tag }}'
+          $notes = (Get-Content .github/release-notes.md -Raw -Encoding utf8).Replace('{{VERSION}}', $v)
+          Set-Content -Path $env:RUNNER_TEMP/notes.md -Value $notes -Encoding utf8
+          $assets = @(Get-ChildItem dist/* | ForEach-Object { $_.FullName })
+          gh release create $tag @assets --title "MultiSnip $v" --notes-file $env:RUNNER_TEMP/notes.md --verify-tag

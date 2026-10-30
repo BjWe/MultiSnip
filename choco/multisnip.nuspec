@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chocolatey-Paket fuer MultiSnip. Version, URLs und Checksummen setzt
+     choco\build-choco.ps1 aus src\resource.h und den Release-Assets. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>multisnip</id>
+    <version>1.1.1</version>
+    <packageSourceUrl>https://github.com/BjWe/MultiSnip/tree/main/choco</packageSourceUrl>
+    <owners>bjwe</owners>
+
+    <title>MultiSnip</title>
+    <authors>bjwe</authors>
+    <projectUrl>https://github.com/BjWe/MultiSnip</projectUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/BjWe/MultiSnip@2375b0a678c6491996a3a096d6050c345ca7700b/src/app.ico</iconUrl>
+    <copyright>2026 bjwe</copyright>
+    <licenseUrl>https://github.com/BjWe/MultiSnip/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/BjWe/MultiSnip</projectSourceUrl>
+    <docsUrl>https://github.com/BjWe/MultiSnip/blob/main/README.md</docsUrl>
+    <bugTrackerUrl>https://github.com/BjWe/MultiSnip/issues</bugTrackerUrl>
+    <tags>multisnip screenshot screen-capture snipping-tool annotation ocr clipboard win32 foss admin</tags>
+    <summary>Lightweight snipping tool that stacks screenshots into a running list per tab.</summary>
+    <description><![CDATA[
+MultiSnip is a small screenshot tool for Windows, written in plain C++ against the
+Win32 API. Instead of handing you one capture at a time, it stacks every snip
+underneath the previous one into a running list, so a bug report, a how-to or a
+comparison grows as you work. Each snip stays individually manageable, and the
+whole stack can be copied or exported as a single image.
+
+### Features
+
+* **Stacked captures** - new snips append to the current tab; reorder them by
+  dragging, hide, replace or delete single entries.
+* **Tabs** - several independent stacks side by side, each with its own
+  background colour, border, spacing, capture delay (0-10 s) and copy behaviour.
+* **Annotation editor** - unlimited layers of vector shapes per snip: pen,
+  marker, line, arrow, rectangle, ellipse, text, numbered badges and crop.
+  The PNG is never touched; shapes live in a sidecar file and are rendered into
+  preview, clipboard and export.
+* **Text recognition** - OCR via the Windows text recognition engine, with the
+  result in an editable dialog. Needs a Windows language pack that includes OCR.
+* **Clipboard and export** - copy the whole stack or a single snip (CF_DIB plus
+  PNG), or save the composite as a PNG.
+* **Global hotkey** - `Ctrl+PrtScn` by default, plus full keyboard navigation
+  and a tray icon.
+* **Plain file storage** - snips are PNGs and INI files under
+  `%LocalAppData%\MultiSnip`, so nothing is locked into a database.
+* **German, English and Spanish** user interface.
+
+### Notes
+
+* Requires Windows 10 version 1809 (build 17763) or newer.
+* Installs per machine into `%ProgramFiles%\MultiSnip`. Settings and snips in
+  `%LocalAppData%\MultiSnip` are kept on uninstall.
+* The binaries are not code signed, so SmartScreen may warn on first launch.
+]]></description>
+    <releaseNotes>https://github.com/BjWe/MultiSnip/releases/tag/v1.1.1</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

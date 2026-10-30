@@ -19,6 +19,15 @@ beendet eine noch laufende Instanz und ersetzt eine ältere Installation. Deinst
 „Apps & Features“; `%LocalAppData%\MultiSnip` mit Einstellungen und Ausschnitten bleibt dabei
 erhalten. Still installieren geht mit `msiexec /i MultiSnip-<version>-x64.msi /qn`.
 
+Über [Chocolatey](https://community.chocolatey.org/packages/multisnip) geht es auch, sobald das
+Paket die Moderation des Community-Repositorys durchlaufen hat:
+
+```bash
+choco install multisnip
+```
+
+Das Paket lädt das passende MSI aus dem GitHub-Release und prüft dessen SHA256-Summe.
+
 Vorausgesetzt wird Windows 10 ab Version 1809 (Build 17763); die Texterkennung braucht
 zusätzlich ein Windows-Sprachpaket mit OCR. Die Pakete sind nicht signiert, darum zeigt Windows
 beim ersten Start gegebenenfalls einen SmartScreen-Hinweis.
@@ -51,6 +60,35 @@ das Übersetzen, wenn die EXE schon vorliegt. Die Version kommt dabei wie übera
 
 Das Paket selbst ist in [installer/MultiSnip.wxs](installer/MultiSnip.wxs) beschrieben
 (Per-Machine-Installation, Lizenz- und Zielordner-Dialog, Startmenü-Verknüpfung, Major-Upgrade).
+
+### Chocolatey-Paket bauen
+
+```bash
+powershell -ExecutionPolicy Bypass -File choco/build-choco.ps1
+```
+
+Das Paket enthält keine Binärdateien, es lädt die MSIs zur Installationszeit aus dem
+GitHub-Release. Darum muss das Release schon veröffentlicht sein: das Skript holt sich die
+SHA256-Summen der beiden MSIs über die GitHub-API (Feld `digest`, es lädt dafür nichts herunter),
+schreibt Version und Summen in [choco/multisnip.nuspec](choco/multisnip.nuspec) und
+[choco/tools/chocolateyinstall.ps1](choco/tools/chocolateyinstall.ps1) und packt
+`dist\multisnip.<version>.nupkg`. Danach:
+
+```bash
+choco install multisnip --source dist --yes
+choco push dist\multisnip.<version>.nupkg --source https://push.chocolatey.org/
+```
+
+Für `choco push` wird ein API-Key von [community.chocolatey.org](https://community.chocolatey.org)
+gebraucht (`choco apikey`).
+
+Deinstallieren übernimmt Chocolateys Auto-Uninstaller über das MSI, ein eigenes Skript dafür gibt
+es nicht. Dafür braucht Chocolatey den Registry-Schnappschuss, den es bei der eigenen Installation
+anlegt (`.registry` unter `C:\ProgramData\chocolatey\.chocolatey\multisnip.<version>\`). Wer
+MultiSnip vorher per MSI von Hand installiert hat, bekommt den nicht: `choco uninstall` meldet dann
+`Skipping auto uninstaller - No registry snapshot`, nimmt nur die Paketregistrierung weg und
+**meldet trotzdem Erfolg**. In dem Fall die Handinstallation vorher über „Apps & Features“
+entfernen und danach per `choco install` installieren.
 
 ### Release
 
@@ -182,4 +220,5 @@ Quellcode: https://github.com/BjWe/MultiSnip
 | `src/app.manifest` | Per-Monitor-DPI (V2) und Common-Controls 6 (Task-Dialog) |
 | `src/app.ico`, `src/resource.h` | Programmsymbol (16–256 px) und zentrale Versionsnummer |
 | `installer/` | WiX-Paketbeschreibung, Lizenz für den Dialog und `build-msi.ps1` |
+| `choco/` | Chocolatey-Paket: `multisnip.nuspec`, `tools/` und `build-choco.ps1` |
 | `.github/workflows/` | Build bei jedem Push, Release beim Tag `v<version>` |

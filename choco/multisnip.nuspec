@@ -11,7 +11,7 @@
     <title>MultiSnip</title>
     <authors>bjwe</authors>
     <projectUrl>https://github.com/BjWe/MultiSnip</projectUrl>
-    <iconUrl>https://cdn.jsdelivr.net/gh/BjWe/MultiSnip@2375b0a678c6491996a3a096d6050c345ca7700b/src/app.ico</iconUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/BjWe/MultiSnip@bf0c105036f3b712952867c084f81d24a4b95d44/choco/icon.png</iconUrl>
     <copyright>2026 bjwe</copyright>
     <licenseUrl>https://github.com/BjWe/MultiSnip/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>

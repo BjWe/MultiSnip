@@ -2594,12 +2594,13 @@ static void DoSave()
 
 enum {
     IDC_PDF_GRP_PAGES = 200, IDC_PDF_PER, IDC_PDF_ONE,
-    IDC_PDF_GRP_PAPER, IDC_PDF_A4, IDC_PDF_IMG, IDC_PDF_NOTE
+    IDC_PDF_GRP_PAPER, IDC_PDF_A4, IDC_PDF_IMG, IDC_PDF_A1B, IDC_PDF_NOTE
 };
 
 // Auswahl des Dialogs; er laeuft modal und nur einmal, darum reicht ein Static.
 static int g_pdfPages = 0;
 static int g_pdfPaper = 0;
+static int g_pdfA = 0;
 
 static INT_PTR CALLBACK PdfDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM)
 {
@@ -2608,6 +2609,7 @@ static INT_PTR CALLBACK PdfDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM)
         // Beschriftungen stehen schon in der Vorlage; hier nur der Zustand.
         CheckRadioButton(dlg, IDC_PDF_PER, IDC_PDF_ONE, g_pdfPages == 1 ? IDC_PDF_ONE : IDC_PDF_PER);
         CheckRadioButton(dlg, IDC_PDF_A4, IDC_PDF_IMG, g_pdfPaper == 1 ? IDC_PDF_IMG : IDC_PDF_A4);
+        CheckDlgButton(dlg, IDC_PDF_A1B, g_pdfA ? BST_CHECKED : BST_UNCHECKED);
         {
             BOOL dark = g_dark ? TRUE : FALSE;
             DwmSetWindowAttribute(dlg, 20, &dark, sizeof(dark));
@@ -2617,6 +2619,7 @@ static INT_PTR CALLBACK PdfDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM)
         if (LOWORD(wp) == IDOK) {
             g_pdfPages = IsDlgButtonChecked(dlg, IDC_PDF_ONE) == BST_CHECKED ? 1 : 0;
             g_pdfPaper = IsDlgButtonChecked(dlg, IDC_PDF_IMG) == BST_CHECKED ? 1 : 0;
+            g_pdfA = IsDlgButtonChecked(dlg, IDC_PDF_A1B) == BST_CHECKED ? 1 : 0;
             EndDialog(dlg, 1);
             return TRUE;
         }
@@ -2630,13 +2633,13 @@ static INT_PTR CALLBACK PdfDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM)
 // true, wenn der Benutzer exportieren will; die Auswahl steht dann in g_pdf*.
 static bool ShowPdfDialog()
 {
-    const short W = 272, H = 160;
+    const short W = 272, H = 182;
     const short BW = 66;                            // Knopfbreite
     std::vector<WORD> v;
     DWORD style = DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
     v.push_back(LOWORD(style)); v.push_back(HIWORD(style));
     v.push_back(0); v.push_back(0);                 // Ex-Style
-    v.push_back(9);                                 // Anzahl Elemente
+    v.push_back(10);                                // Anzahl Elemente
     v.push_back(0); v.push_back(0); v.push_back(W); v.push_back(H);
     v.push_back(0); v.push_back(0);                 // Menue, Klasse
     DlgStr(v, TR(S_PDF_TITLE));
@@ -2655,7 +2658,10 @@ static bool ShowPdfDialog()
     DlgItem(v, kRadio | WS_GROUP, 14, 74, W - 28, 12, IDC_PDF_A4, 0x80, TR(S_PDF_A4));
     DlgItem(v, kRadio, 14, 90, W - 28, 12, IDC_PDF_IMG, 0x80, TR(S_PDF_IMGSIZE));
 
-    DlgItem(v, WS_CHILD | WS_VISIBLE | WS_GROUP | SS_LEFT, 7, 113, W - 14, 20, IDC_PDF_NOTE, 0x82, TR(S_PDF_NOTE));
+    // WS_GROUP beendet hier die zweite Radiogruppe.
+    DlgItem(v, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_GROUP | BS_AUTOCHECKBOX,
+        10, 115, W - 20, 12, IDC_PDF_A1B, 0x80, TR(S_PDF_PDFA));
+    DlgItem(v, WS_CHILD | WS_VISIBLE | WS_GROUP | SS_LEFT, 7, 134, W - 14, 20, IDC_PDF_NOTE, 0x82, TR(S_PDF_NOTE));
     DlgItem(v, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
         W - 7 - BW - 4 - BW, H - 22, BW, 14, IDOK, 0x80, TR(S_PDF_EXPORT));
     DlgItem(v, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
@@ -2673,18 +2679,22 @@ static void DoExportPdf()
 
     g_pdfPages = g_app.def.pdfPages;
     g_pdfPaper = g_app.def.pdfPaper;
+    g_pdfA = g_app.def.pdfA;
     if (!ShowPdfDialog()) return;
 
     // Die Auswahl ist die Vorgabe fuer das naechste Mal.
-    if (g_pdfPages != g_app.def.pdfPages || g_pdfPaper != g_app.def.pdfPaper) {
+    if (g_pdfPages != g_app.def.pdfPages || g_pdfPaper != g_app.def.pdfPaper || g_pdfA != g_app.def.pdfA) {
         g_app.def.pdfPages = g_pdfPages;
         g_app.def.pdfPaper = g_pdfPaper;
+        g_app.def.pdfA = g_pdfA;
         Model_SaveGlobal();
     }
 
     PdfOptions o;
     o.pages = g_pdfPages == 1 ? PdfPages::Single : PdfPages::PerSnippet;
     o.paper = g_pdfPaper == 1 ? PdfPaper::ImageSize : PdfPaper::A4;
+    o.pdfA = g_pdfA != 0;
+    o.title = t->title;
 
     std::wstring name = t->title;
     for (auto& ch : name) if (wcschr(L"\\/:*?\"<>|", ch)) ch = L'_';
@@ -2713,6 +2723,7 @@ static void DoExportPdf()
     int pageCount = 0;
     if (Pdf_ExportTab(*t, o, file, &pageCount)) Flash(TRF(S_PDF_SAVED_FMT, file, pageCount));
     else if (GetLastError() == ERROR_INVALID_PARAMETER) Flash(TR(S_COMPOSITE_TOO_BIG));
+    else if (GetLastError() == ERROR_NOT_FOUND) Flash(TR(S_PDF_NO_ICC));
     else ShowSaveError(file, GetLastError());
 }
 

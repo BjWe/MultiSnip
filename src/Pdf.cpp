@@ -1,7 +1,9 @@
 #include "Pdf.h"
 #include "Image.h"
+#include "resource.h"
 #include <algorithm>
 #include <objidl.h>
+#include <objbase.h>
 // gdiplus-Header verwenden min/max als Makros; mit NOMINMAX brauchen sie die std-Varianten.
 using std::min;
 using std::max;
@@ -47,6 +49,227 @@ std::string Num(double v)
         if (f % 10) s += (char)('0' + f % 10);
     }
     return neg ? "-" + s : s;
+}
+
+// ------------------------------------------------------- Metadaten-Hilfsmittel
+
+std::string Int2(int v) { return std::string(1, (char)('0' + v / 10 % 10)) + (char)('0' + v % 10); }
+
+// Zeitstempel in beiden Schreibweisen, aus derselben Uhrzeit: PDF/A verlangt,
+// dass /Info und XMP uebereinstimmen.
+struct Stamp {
+    std::string pdf;                    // D:YYYYMMDDHHmmSS+HH'mm'
+    std::string xmp;                    // YYYY-MM-DDTHH:mm:ss+HH:mm
+};
+
+Stamp Now()
+{
+    SYSTEMTIME lt{}, ut{};
+    GetLocalTime(&lt);
+    GetSystemTime(&ut);
+
+    // Zonenversatz aus der Differenz beider Uhren: das trifft die Sommerzeit
+    // ohne sie selbst beurteilen zu muessen.
+    FILETIME lf{}, uf{};
+    long long mins = 0;
+    if (SystemTimeToFileTime(&lt, &lf) && SystemTimeToFileTime(&ut, &uf)) {
+        ULARGE_INTEGER a{}, b{};
+        a.LowPart = lf.dwLowDateTime; a.HighPart = lf.dwHighDateTime;
+        b.LowPart = uf.dwLowDateTime; b.HighPart = uf.dwHighDateTime;
+        // 1 Minute = 6e8 Einheiten von 100 ns, halbe Minute = 3e8 zum Runden.
+        long long diff = (long long)a.QuadPart - (long long)b.QuadPart;
+        mins = (diff + (diff >= 0 ? 300000000LL : -300000000LL)) / 600000000LL;
+    }
+    char sign = mins < 0 ? '-' : '+';
+    long long am = mins < 0 ? -mins : mins;
+    std::string oh = Int2((int)(am / 60)), om = Int2((int)(am % 60));
+
+    std::string y = std::to_string(lt.wYear);
+    std::string date = y + Int2(lt.wMonth) + Int2(lt.wDay);
+    std::string time = Int2(lt.wHour) + Int2(lt.wMinute) + Int2(lt.wSecond);
+
+    Stamp s;
+    s.pdf = "D:" + date + time + sign + oh + "'" + om + "'";
+    s.xmp = y + "-" + Int2(lt.wMonth) + "-" + Int2(lt.wDay) + "T" +
+            Int2(lt.wHour) + ":" + Int2(lt.wMinute) + ":" + Int2(lt.wSecond) +
+            sign + oh + ":" + om;
+    return s;
+}
+
+std::string Utf8(const std::wstring& s)
+{
+    if (s.empty()) return std::string();
+    int n = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), (int)s.size(), NULL, 0, NULL, NULL);
+    if (n <= 0) return std::string();
+    std::string out((size_t)n, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, s.c_str(), (int)s.size(), &out[0], n, NULL, NULL);
+    return out;
+}
+
+std::string XmlEscape(const std::string& s)
+{
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        case '"': out += "&quot;"; break;
+        default:
+            // Steuerzeichen sind in XML 1.0 nicht erlaubt.
+            if ((unsigned char)c >= 0x20 || c == '\t') out += c;
+            break;
+        }
+    }
+    return out;
+}
+
+// Textstring als UTF-16BE-Hexfolge mit BOM. Damit sind Umlaute und alles
+// andere erledigt, ohne Klammern und Backslashes zu maskieren.
+std::string PdfTextString(const std::wstring& s)
+{
+    static const char* hex = "0123456789ABCDEF";
+    std::string out = "<FEFF";
+    for (wchar_t c : s) {
+        unsigned v = (unsigned short)c;
+        out += hex[(v >> 12) & 0xF];
+        out += hex[(v >> 8) & 0xF];
+        out += hex[(v >> 4) & 0xF];
+        out += hex[v & 0xF];
+    }
+    out += ">";
+    return out;
+}
+
+std::string Producer() { return std::string("MultiSnip ") + APP_VERSION_STR; }
+
+// Nur ASCII, darum genuegt das Verbreitern der Zeichen.
+std::wstring ProducerW()
+{
+    std::string s = Producer();
+    return std::wstring(s.begin(), s.end());
+}
+
+// --------------------------------------------------------------- sRGB-Profil
+
+// Das Profil wird nicht mitgeliefert, sondern aus dem Farbprofilordner von
+// Windows gelesen: so haengt am Repository keine Fremddatei mit eigener
+// Lizenzlage. GetColorDirectoryW statt eines festen Pfades, damit es auch im
+// 32-Bit-Prozess und bei verschobenem Windows stimmt.
+std::wstring ColorDir()
+{
+    std::wstring dir;
+    HMODULE m = LoadLibraryW(L"mscms.dll");
+    if (m) {
+        typedef BOOL (WINAPI *PFN)(PCWSTR, PWSTR, PDWORD);
+        PFN get = (PFN)GetProcAddress(m, "GetColorDirectoryW");
+        if (get) {
+            wchar_t buf[MAX_PATH]{};
+            DWORD cb = sizeof(buf);
+            if (get(NULL, buf, &cb)) dir = buf;
+        }
+        FreeLibrary(m);
+    }
+    if (dir.empty()) {
+        wchar_t win[MAX_PATH]{};
+        if (GetWindowsDirectoryW(win, MAX_PATH)) {
+            // %windir%\System32\spool ist von der WOW64-Umleitung ausgenommen,
+            // der Pfad stimmt also in beiden Bitbreiten.
+            dir = std::wstring(win) + L"\\System32\\spool\\drivers\\color";
+        }
+    }
+    return dir;
+}
+
+bool ReadFileBytes(const std::wstring& path, std::string& out, DWORD maxBytes)
+{
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    bool ok = GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart <= (LONGLONG)maxBytes;
+    if (ok) {
+        out.resize((size_t)size.QuadPart);
+        DWORD rd = 0;
+        ok = ReadFile(f, &out[0], (DWORD)out.size(), &rd, NULL) && rd == out.size();
+    }
+    DWORD err = ok ? 0 : GetLastError();
+    CloseHandle(f);
+    if (!ok) SetLastError(err ? err : ERROR_FILE_NOT_FOUND);
+    return ok;
+}
+
+bool LoadSrgbProfile(std::string& out)
+{
+    std::wstring dir = ColorDir();
+    if (dir.empty()) { SetLastError(ERROR_NOT_FOUND); return false; }
+    if (!dir.empty() && dir.back() != L'\\') dir += L'\\';
+
+    // Der erste Name ist der von Windows mitgelieferte; die anderen sind
+    // Schreibweisen, die auf aelteren oder angepassten Systemen vorkommen.
+    static const wchar_t* kNames[] = {
+        L"sRGB Color Space Profile.icm",
+        L"sRGB_v4_ICC_preference.icc",
+        L"sRGB.icm",
+    };
+    for (const wchar_t* n : kNames) {
+        if (ReadFileBytes(dir + n, out, 4u << 20)) return true;
+    }
+    SetLastError(ERROR_NOT_FOUND);         // eigener Code, damit die UI es erklaeren kann
+    return false;
+}
+
+// XMP-Paket mit der PDF/A-Kennung. Inhalt muss zu /Info passen.
+std::string XmpPacket(const std::wstring& title, const Stamp& st)
+{
+    std::string t = XmlEscape(Utf8(title));
+    std::string p = XmlEscape(Producer());
+    std::string s;
+    s += "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n";
+    s += "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n";
+    s += " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n";
+    s += "  <rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\">\n";
+    s += "   <pdfaid:part>1</pdfaid:part>\n";
+    s += "   <pdfaid:conformance>B</pdfaid:conformance>\n";
+    s += "  </rdf:Description>\n";
+    s += "  <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n";
+    s += "   <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">" + t + "</rdf:li></rdf:Alt></dc:title>\n";
+    s += "  </rdf:Description>\n";
+    s += "  <rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\n";
+    s += "   <xmp:CreatorTool>" + p + "</xmp:CreatorTool>\n";
+    s += "   <xmp:CreateDate>" + st.xmp + "</xmp:CreateDate>\n";
+    s += "   <xmp:ModifyDate>" + st.xmp + "</xmp:ModifyDate>\n";
+    s += "  </rdf:Description>\n";
+    s += "  <rdf:Description rdf:about=\"\" xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\">\n";
+    s += "   <pdf:Producer>" + p + "</pdf:Producer>\n";
+    s += "  </rdf:Description>\n";
+    s += " </rdf:RDF>\n";
+    s += "</x:xmpmeta>\n";
+    // Auffuellen, damit Werkzeuge das Paket an Ort und Stelle aendern koennen.
+    for (int i = 0; i < 20; i++) s += "                                                                           \n";
+    s += "<?xpacket end=\"w\"?>\n";
+    return s;
+}
+
+// Dokumentkennung: zwei gleiche Haelften, wie bei einer frischen Datei ueblich.
+std::string DocId()
+{
+    static const char* hex = "0123456789ABCDEF";
+    GUID g{};
+    std::string out = "<";
+    if (CoCreateGuid(&g) == S_OK) {
+        const unsigned char* p = (const unsigned char*)&g;
+        for (int i = 0; i < 16; i++) { out += hex[p[i] >> 4]; out += hex[p[i] & 0xF]; }
+    }
+    else {
+        FILETIME ft{};
+        GetSystemTimeAsFileTime(&ft);
+        const unsigned char* p = (const unsigned char*)&ft;
+        for (int i = 0; i < 16; i++) { out += hex[p[i % 8] >> 4]; out += hex[p[i % 8] & 0xF]; }
+    }
+    out += ">";
+    return out;
 }
 
 // ------------------------------------------------------------------ PNG lesen
@@ -272,19 +495,23 @@ PageGeom Geometry(int w, int h, PdfPaper paper)
 
 // ------------------------------------------------------------------ PDF bauen
 
+// Objektnummern werden zuerst vergeben und erst danach geschrieben: der
+// Katalog verweist auf Objekte, die hinter ihm in der Datei stehen, und die
+// Querverweistabelle bildet Nummern auf Offsets ab - die Reihenfolge in der
+// Datei ist dafuer gleichgueltig.
 struct Writer {
     std::string buf;
-    std::vector<size_t> offsets;        // Offset von Objekt 1..n
+    std::vector<size_t> offsets;        // Offset von Objekt 1..n, 0 = ungeschrieben
 
-    int Begin()                         // naechste Objektnummer, Offset merken
+    int Reserve() { offsets.push_back(0); return (int)offsets.size(); }
+    void Begin(int id)
     {
-        offsets.push_back(buf.size());
-        int id = (int)offsets.size();
+        offsets[(size_t)id - 1] = buf.size();
         buf += std::to_string(id) + " 0 obj\n";
-        return id;
     }
     void End() { buf += "endobj\n"; }
     void Put(const std::string& s) { buf += s; }
+    static std::string Ref(int id) { return std::to_string(id) + " 0 R"; }
 };
 
 struct PageImage {
@@ -355,6 +582,13 @@ bool Pdf_WriteBitmaps(const std::vector<HBITMAP>& pages, const PdfOptions& o, co
 {
     if (pages.empty()) { SetLastError(ERROR_INVALID_PARAMETER); return false; }
 
+    // Das Farbprofil zuerst holen: ohne OutputIntent gibt es kein PDF/A, und
+    // dann soll die Arbeit gar nicht erst anfangen.
+    std::string iccData;
+    if (o.pdfA && !LoadSrgbProfile(iccData)) return false;
+
+    std::wstring title = o.title.empty() ? L"MultiSnip" : o.title;
+
     std::vector<PageImage> imgs(pages.size());
     for (size_t i = 0; i < pages.size(); i++) {
         if (!pages[i] || !PrepareImage(pages[i], imgs[i])) {
@@ -363,42 +597,106 @@ bool Pdf_WriteBitmaps(const std::vector<HBITMAP>& pages, const PdfOptions& o, co
         }
     }
 
-    // Objektnummern: 1 Katalog, 2 Seitenbaum, danach je Seite Seite/Inhalt/Bild.
-    const int kFirstPageObj = 3;
+    std::vector<PageGeom> geoms(imgs.size());
+    for (size_t i = 0; i < imgs.size(); i++) geoms[i] = Geometry(imgs[i].w, imgs[i].h, o.paper);
+
+    // Erst alle Objektnummern vergeben, dann schreiben.
     Writer w;
+    int catalog = w.Reserve();
+    int tree = w.Reserve();
+    int info = w.Reserve();
+    int xmp = o.pdfA ? w.Reserve() : 0;
+    int icc = o.pdfA ? w.Reserve() : 0;
+    std::vector<int> pageIds(imgs.size()), contentIds(imgs.size()), imageIds(imgs.size());
+    for (size_t i = 0; i < imgs.size(); i++) {
+        pageIds[i] = w.Reserve();
+        contentIds[i] = w.Reserve();
+        imageIds[i] = w.Reserve();
+    }
+
+    Stamp st = Now();
+    std::string id = DocId();
+    std::wstring prod = ProducerW();
+
     w.buf += "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";       // Binaer-Kommentar: Datei gilt als binaer
 
-    w.Begin();
-    w.Put("<< /Type /Catalog /Pages 2 0 R >>\n");
+    // Beim Oeffnen die lange Einzelseite auf Breite einpassen (/FitH am obersten
+    // Rand), bei A4-Seiten die ganze Seite (/Fit).
+    std::string openAction = o.pages == PdfPages::Single
+        ? "[" + Writer::Ref(pageIds[0]) + " /FitH " + Num(geoms[0].ph) + "]"
+        : "[" + Writer::Ref(pageIds[0]) + " /Fit]";
+
+    w.Begin(catalog);
+    {
+        std::string cat = "<< /Type /Catalog /Pages " + Writer::Ref(tree) +
+                          " /PageLayout /OneColumn"
+                          " /ViewerPreferences << /DisplayDocTitle true >>"
+                          " /OpenAction " + openAction;
+        if (o.pdfA) {
+            cat += " /Metadata " + Writer::Ref(xmp) +
+                   " /OutputIntents [ << /Type /OutputIntent /S /GTS_PDFA1"
+                   " /OutputConditionIdentifier (sRGB IEC61966-2.1)"
+                   " /RegistryName (http://www.color.org)"
+                   " /Info (sRGB IEC61966-2.1)"
+                   " /DestOutputProfile " + Writer::Ref(icc) + " >> ]";
+        }
+        cat += " >>\n";
+        w.Put(cat);
+    }
     w.End();
 
     std::string kids;
     for (size_t i = 0; i < imgs.size(); i++) {
         if (i) kids += " ";
-        kids += std::to_string(kFirstPageObj + (int)i * 3) + " 0 R";
+        kids += Writer::Ref(pageIds[i]);
     }
-    w.Begin();
+    w.Begin(tree);
     w.Put("<< /Type /Pages /Kids [" + kids + "] /Count " + std::to_string(imgs.size()) + " >>\n");
     w.End();
 
+    // /Info und XMP muessen dieselben Angaben tragen, sonst beanstanden
+    // PDF/A-Pruefer den Widerspruch.
+    w.Begin(info);
+    w.Put("<< /Title " + PdfTextString(title) +
+          " /Creator " + PdfTextString(prod) +
+          " /Producer " + PdfTextString(prod) +
+          " /CreationDate (" + st.pdf + ")"
+          " /ModDate (" + st.pdf + ") >>\n");
+    w.End();
+
+    if (o.pdfA) {
+        // Das XMP-Paket bleibt unkomprimiert und ohne Filter: PDF/A verlangt,
+        // dass es ohne Dekodieren lesbar ist.
+        std::string packet = XmpPacket(title, st);
+        w.Begin(xmp);
+        w.Put("<< /Type /Metadata /Subtype /XML /Length " + std::to_string(packet.size()) + " >>\nstream\n");
+        w.Put(packet);
+        w.Put("\nendstream\n");
+        w.End();
+
+        w.Begin(icc);
+        w.Put("<< /N 3 /Length " + std::to_string(iccData.size()) + " >>\nstream\n");
+        w.Put(iccData);
+        w.Put("\nendstream\n");
+        w.End();
+    }
+
     for (size_t i = 0; i < imgs.size(); i++) {
         const PageImage& im = imgs[i];
-        PageGeom g = Geometry(im.w, im.h, o.paper);
-        int pageId = kFirstPageObj + (int)i * 3;
-        int contentId = pageId + 1;
-        int imageId = pageId + 2;
+        const PageGeom& g = geoms[i];
 
-        w.Begin();
-        w.Put("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + Num(g.pw) + " " + Num(g.ph) + "]"
-              " /Resources << /XObject << /Im0 " + std::to_string(imageId) + " 0 R >> >>"
-              " /Contents " + std::to_string(contentId) + " 0 R >>\n");
+        w.Begin(pageIds[i]);
+        w.Put("<< /Type /Page /Parent " + Writer::Ref(tree) +
+              " /MediaBox [0 0 " + Num(g.pw) + " " + Num(g.ph) + "]"
+              " /Resources << /XObject << /Im0 " + Writer::Ref(imageIds[i]) + " >> >>"
+              " /Contents " + Writer::Ref(contentIds[i]) + " >>\n");
         w.End();
 
         // Die Bildmatrix spannt das Einheitsquadrat auf die Zielflaeche auf;
         // Zeile 0 des Bildes landet dabei oben.
         std::string content = "q " + Num(g.iw) + " 0 0 " + Num(g.ih) + " " +
                               Num(g.ix) + " " + Num(g.iy) + " cm /Im0 Do Q\n";
-        w.Begin();
+        w.Begin(contentIds[i]);
         w.Put("<< /Length " + std::to_string(content.size()) + " >>\nstream\n");
         w.Put(content);
         w.Put("endstream\n");
@@ -409,7 +707,7 @@ bool Pdf_WriteBitmaps(const std::vector<HBITMAP>& pages, const PdfOptions& o, co
             parms = " /DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns " +
                     std::to_string(im.w) + " >>";
         }
-        w.Begin();
+        w.Begin(imageIds[i]);
         w.Put("<< /Type /XObject /Subtype /Image /Width " + std::to_string(im.w) +
               " /Height " + std::to_string(im.h) +
               " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode" + parms +
@@ -427,7 +725,10 @@ bool Pdf_WriteBitmaps(const std::vector<HBITMAP>& pages, const PdfOptions& o, co
         std::string s = std::to_string(off);
         w.buf += std::string(10 - min<size_t>(10, s.size()), '0') + s + " 00000 n \n";
     }
-    w.buf += "trailer\n<< /Size " + std::to_string(w.offsets.size() + 1) + " /Root 1 0 R >>\n";
+    w.buf += "trailer\n<< /Size " + std::to_string(w.offsets.size() + 1) +
+             " /Root " + Writer::Ref(catalog) +
+             " /Info " + Writer::Ref(info) +
+             " /ID [" + id + " " + id + "] >>\n";
     w.buf += "startxref\n" + std::to_string(xref) + "\n%%EOF\n";
 
     return WriteFileAtomic(path, w.buf);
@@ -438,6 +739,9 @@ bool Pdf_ExportTab(const Tab& t, const PdfOptions& o, const std::wstring& path, 
     std::vector<HBITMAP> pages;
     bool ok = false;
     if (pageCount) *pageCount = 0;
+
+    PdfOptions opt = o;
+    if (opt.title.empty()) opt.title = t.title;
 
     if (o.pages == PdfPages::Single) {
         int w = 0, h = 0;
@@ -456,7 +760,7 @@ bool Pdf_ExportTab(const Tab& t, const PdfOptions& o, const std::wstring& path, 
         SetLastError(ERROR_INVALID_PARAMETER);
     }
     else {
-        ok = Pdf_WriteBitmaps(pages, o, path);
+        ok = Pdf_WriteBitmaps(pages, opt, path);
         if (ok && pageCount) *pageCount = (int)pages.size();
     }
 

@@ -24,6 +24,12 @@ enum class PdfPaper {
 struct PdfOptions {
     PdfPages pages = PdfPages::PerSnippet;
     PdfPaper paper = PdfPaper::A4;
+    // PDF/A-1b: XMP-Kennung, Dokumentmetadaten und ein OutputIntent mit
+    // eingebettetem sRGB-Profil. Schlaegt mit ERROR_NOT_FOUND fehl, wenn das
+    // Systemfarbprofil nicht lesbar ist - lieber kein PDF als ein falsch
+    // ausgezeichnetes.
+    bool pdfA = false;
+    std::wstring title;                 // Dokumenttitel; leer = Dateiname des Tabs
 };
 
 // Kern: fertige Bitmaps (32-bpp-DIBs) werden zu Seiten in der uebergebenen

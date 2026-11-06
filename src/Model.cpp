@@ -269,6 +269,7 @@ static void LoadGlobal()
     o.numberScope = Clamp(f.GetInt(L"Defaults", L"NumberScope", d.numberScope), 0, 1);
     o.pdfPages = Clamp(f.GetInt(L"Defaults", L"PdfPages", d.pdfPages), 0, 1);
     o.pdfPaper = Clamp(f.GetInt(L"Defaults", L"PdfPaper", d.pdfPaper), 0, 1);
+    o.pdfA = Clamp(f.GetInt(L"Defaults", L"PdfA", d.pdfA), 0, 1);
     o.captureCursor = f.GetInt(L"Defaults", L"CaptureCursor", d.captureCursor) != 0;
     o.hotMod = (UINT)f.GetInt(L"Defaults", L"HotkeyMod", (int)d.hotMod) & (MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_WIN);
     o.hotVk = (UINT)f.GetInt(L"Defaults", L"HotkeyKey", (int)d.hotVk);
@@ -404,6 +405,7 @@ bool Model_SaveGlobal()
     w.SetInt(L"Defaults", L"NumberScope", d.numberScope);
     w.SetInt(L"Defaults", L"PdfPages", d.pdfPages);
     w.SetInt(L"Defaults", L"PdfPaper", d.pdfPaper);
+    w.SetInt(L"Defaults", L"PdfA", d.pdfA);
     w.SetInt(L"Defaults", L"CaptureCursor", d.captureCursor ? 1 : 0);
     w.SetInt(L"Defaults", L"HotkeyMod", (int)d.hotMod);
     w.SetInt(L"Defaults", L"HotkeyKey", (int)d.hotVk);

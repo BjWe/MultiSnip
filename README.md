@@ -120,12 +120,31 @@ git tag v1.1.0 && git push origin v1.1.0
 | Text erkennen (OCR) | „A“-Symbol in der Kartenleiste: Windows-Texterkennung im Hintergrund, danach ein Dialog mit dem Text zum Nachbearbeiten und „Alles kopieren“ (nichts wird gespeichert). Braucht ein Windows-Sprachpaket mit Texterkennung |
 | Ausschnitt zuschneiden | Werkzeug „Zuschneiden“ (`C`) im Editor: Rechteck aufziehen. Das PNG bleibt unverändert, der Zuschnitt steht als `Crop=l,t,r,b` in der `tab.ini`; Vorschau, Gesamtbild, Einzelkopie und OCR zeigen nur den Zuschnitt. „Zuschnitt aufheben“ in der Editor-Leiste |
 | Gesamtbild speichern | „Speichern als PNG…“ oder `Strg+S` |
-| Als PDF exportieren | Knopf „PDF“ in der Befehlsleiste. Ein Dialog fragt, ob **ein Ausschnitt pro Seite** oder **alles auf eine Seite** soll und ob die Seiten **A4** (Bild mit 10 mm Rand eingepasst, Querformat automatisch) oder **die Bildgröße** haben (1 px = 1/96 Zoll). Die Auswahl bleibt als Vorgabe erhalten |
+| Als PDF exportieren | Knopf „PDF“ in der Befehlsleiste. Ein Dialog fragt, ob **ein Ausschnitt pro Seite** oder **alles auf eine Seite** soll, ob die Seiten **A4** (Bild mit 10 mm Rand eingepasst, Querformat automatisch) oder **die Bildgröße** haben (1 px = 1/96 Zoll), und ob als **PDF/A-1b** ausgezeichnet wird. Die Auswahl bleibt als Vorgabe erhalten |
 | Tab anlegen / umbenennen | „+“ bzw. Doppelklick auf den Tab, `F2`, Knopf „Umbenennen“ |
 | Tab wechseln | Klick, `Strg+Tab` / `Strg+Umschalt+Tab`; passen nicht alle Tabs in die Leiste, listet „…“ rechts alle auf |
 | Zoom der Vorschau | `Strg+Mausrad`, `Strg++`/`Strg+-`, `Strg+0`, Knöpfe in der Statuszeile |
 | Scrollen | Mausrad senkrecht, `Umschalt+Mausrad` waagerecht (breite Ausschnitte), Scrollbalken rechts und unten |
 | Fenster schließen | versteckt nur im Tray; Beenden über das Tray-Menü |
+
+### PDF im Einzelnen
+
+Die Bilder gehen verlustfrei hinein. PDF kennt unter `/FlateDecode` mit `/Predictor 15` dieselben
+Zeilenfilter wie PNG, darum wird der IDAT-Strom eines von GDI+ erzeugten PNG unverändert
+eingebettet – ohne Umkodieren und ohne Kompressionsbibliothek. Screenshot-artige Inhalte
+schrumpfen dabei stark (3,6 MB Pixel → 34 KB).
+
+Jedes PDF trägt Titel (der Tab-Name), Erstellungsdatum, Produzent und eine Dokumentkennung.
+Beim Öffnen passt der Reader die lange Einzelseite auf die Breite ein, A4-Seiten ganz.
+
+`PDF/A-1b` ergänzt die XMP-Kennung und einen OutputIntent mit eingebettetem sRGB-Profil. Das
+Profil kommt aus dem Farbprofilordner von Windows und wird nicht mitgeliefert; ist es nicht
+lesbar, bricht der Export ab und sagt das – ein PDF, das PDF/A behauptet und es nicht einhält,
+wäre schlimmer als keins. Die Konformität selbst ist nicht automatisch geprüft; wer sie braucht,
+sollte sie einmal mit einem Validator (etwa veraPDF) gegenlesen.
+
+Seiten jenseits der PDF-Grenze von 14400 Punkten (200 Zoll) werden gleichmäßig verkleinert; ein
+sehr langer Stapel bleibt also eine Seite, nur kleiner.
 
 ## Tastaturnavigation
 

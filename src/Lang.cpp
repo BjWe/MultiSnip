@@ -239,6 +239,14 @@ static const wchar_t* kStr[S__COUNT][3] = {
         L"Gespeichert: %s   ·   %d Seite(n)",
         L"Saved: %s   ·   %d page(s)",
         L"Guardado: %s   ·   %d página(s)" },
+    /* S_PDF_PDFA   */ {
+        L"PDF/A-1b für die Langzeitarchivierung",
+        L"PDF/A-1b for long-term archiving",
+        L"PDF/A-1b para archivado a largo plazo" },
+    /* S_PDF_NO_ICC */ {
+        L"PDF/A nicht möglich: das sRGB-Farbprofil von Windows ist nicht lesbar",
+        L"PDF/A not possible: the Windows sRGB colour profile cannot be read",
+        L"PDF/A no es posible: no se puede leer el perfil de color sRGB de Windows" },
 };
 
 static Lang g_sel = Lang::Auto;

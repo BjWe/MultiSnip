@@ -60,7 +60,13 @@ jobs:
         run: |
           $v   = '${{ steps.version.outputs.version }}'
           $tag = '${{ steps.version.outputs.tag }}'
-          $notes = (Get-Content .github/release-notes.md -Raw -Encoding utf8).Replace('{{VERSION}}', $v)
+          # Hinweise zu dieser Version, falls es eine Datei dafuer gibt. Sonst
+          # bleibt der Platz leer - so veraltet im Vorlagentext nichts.
+          $hiFile = ".github/release-notes/$v.md"
+          $hi = if (Test-Path $hiFile) { (Get-Content $hiFile -Raw -Encoding utf8).TrimEnd() + "`n`n" } else { '' }
+          $notes = (Get-Content .github/release-notes.md -Raw -Encoding utf8).
+                     Replace('{{VERSION}}', $v).
+                     Replace('{{HIGHLIGHTS}}', $hi)
           Set-Content -Path $env:RUNNER_TEMP/notes.md -Value $notes -Encoding utf8
           $assets = @(Get-ChildItem dist/* | ForEach-Object { $_.FullName })
           gh release create $tag @assets --title "MultiSnip $v" --notes-file $env:RUNNER_TEMP/notes.md --verify-tag

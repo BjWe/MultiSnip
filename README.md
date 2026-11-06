@@ -120,6 +120,7 @@ git tag v1.1.0 && git push origin v1.1.0
 | Text erkennen (OCR) | „A“-Symbol in der Kartenleiste: Windows-Texterkennung im Hintergrund, danach ein Dialog mit dem Text zum Nachbearbeiten und „Alles kopieren“ (nichts wird gespeichert). Braucht ein Windows-Sprachpaket mit Texterkennung |
 | Ausschnitt zuschneiden | Werkzeug „Zuschneiden“ (`C`) im Editor: Rechteck aufziehen. Das PNG bleibt unverändert, der Zuschnitt steht als `Crop=l,t,r,b` in der `tab.ini`; Vorschau, Gesamtbild, Einzelkopie und OCR zeigen nur den Zuschnitt. „Zuschnitt aufheben“ in der Editor-Leiste |
 | Gesamtbild speichern | „Speichern als PNG…“ oder `Strg+S` |
+| Als PDF exportieren | Knopf „PDF“ in der Befehlsleiste. Ein Dialog fragt, ob **ein Ausschnitt pro Seite** oder **alles auf eine Seite** soll und ob die Seiten **A4** (Bild mit 10 mm Rand eingepasst, Querformat automatisch) oder **die Bildgröße** haben (1 px = 1/96 Zoll). Die Auswahl bleibt als Vorgabe erhalten |
 | Tab anlegen / umbenennen | „+“ bzw. Doppelklick auf den Tab, `F2`, Knopf „Umbenennen“ |
 | Tab wechseln | Klick, `Strg+Tab` / `Strg+Umschalt+Tab`; passen nicht alle Tabs in die Leiste, listet „…“ rechts alle auf |
 | Zoom der Vorschau | `Strg+Mausrad`, `Strg++`/`Strg+-`, `Strg+0`, Knöpfe in der Statuszeile |
@@ -169,8 +170,8 @@ Doppelklick benennt um. Gezeichnet wird immer in der markierten Ebene.
 mitschleppen; ein Ordner aus älteren Versionen unter `%AppData%` wird beim ersten Start verschoben).
 
 - `MultiSnip.ini` – `[Defaults]` (Füllfarbe, Paddings, Verzögerung, Mauszeiger, Hotkey,
-  Dashboard, Lösch-Nachfrage, Sprache, Nummern-Zählbereich) und `[State]` (letzter Tab,
-  Fensterposition).
+  Dashboard, Lösch-Nachfrage, Sprache, Nummern-Zählbereich, PDF-Export) und `[State]`
+  (letzter Tab, Fensterposition).
 - Pro Tab ein Ordner mit GUID-Namen: `tab.ini` (Titel, Reihenfolge, Farbe, Paddings, Verzögerung,
   Nummern-Zählbereich, Scroll, Snippet-Liste mit Datei/Sichtbarkeit/Position) plus die
   PNG-Dateien. Ein neuer Tab erbt Farbe, Paddings, Verzögerung und Zählbereich aus `[Defaults]`
@@ -213,6 +214,7 @@ Quellcode: https://github.com/BjWe/MultiSnip
 |---|---|
 | `src/Model.*` | Datenmodell (Tabs, Snippets), INI-Persistenz, Ordner-Scan |
 | `src/Image.*` | GDI+-Init, PNG laden/speichern, Layout + Gesamtbild, Clipboard |
+| `src/Pdf.*` | PDF-Export von Hand (keine Bibliothek): Seitengeometrie, Bilder verlustfrei als /FlateDecode |
 | `src/Capture.*` | Einfrieren pro Monitor, Overlay-Fenster, Auswahl, Abbruch-Routine |
 | `src/Ocr.*` | Texterkennung über Windows.Media.Ocr (C++/WinRT, Arbeitsthread, Ergebnis per Fensternachricht) |
 | `src/MainWindow.cpp` | Hauptfenster (selbst gezeichnet, Double Buffering), Tabs, Stapel, Drag, Zoom, Dashboard, Einstellungen, Tray, Hotkey, `wWinMain` |

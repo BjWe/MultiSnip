@@ -68,6 +68,8 @@ struct Defaults {
     int delayMs = 0;
     int autoCopy = 0;           // Vorgabe fuer neue Tabs (siehe Tab::autoCopy)
     int numberScope = 0;        // Vorgabe fuer neue Tabs (siehe Tab::numberScope)
+    int pdfPages = 0;           // PDF-Export: 0 = ein Ausschnitt pro Seite, 1 = alles auf eine Seite
+    int pdfPaper = 0;           // PDF-Export: 0 = A4 eingepasst, 1 = Seite in Bildgroesse
     bool captureCursor = false;
     UINT hotMod = MOD_CONTROL;  // Strg+Druck: kollidiert nicht mit "Speichern unter" (Strg+Umschalt+S)
     UINT hotVk = VK_SNAPSHOT;

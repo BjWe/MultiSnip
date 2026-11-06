@@ -14,6 +14,7 @@
 #include <cwctype>
 #include "Model.h"
 #include "Image.h"
+#include "Pdf.h"
 #include "Capture.h"
 #include "Util.h"
 #include "Lang.h"
@@ -84,6 +85,7 @@ static bool g_dark = false;
 #define ICO_SETTINGS L"\xE713"
 #define ICO_COPY     L"\xE8C8"
 #define ICO_SAVE     L"\xE74E"
+#define ICO_PDF      L"\xE8A5"
 #define ICO_RENAME   L"\xE8AC"
 #define ICO_SNIP     L"\xE7A8"
 #define ICO_REPLACE  L"\xE72C"
@@ -118,7 +120,7 @@ static const wchar_t* kGitHubUrl = L"https://github.com/BjWe/MultiSnip";
 
 enum class HK {
     None, Tab, TabClose, TabAdd, Dash,
-    Snip, SnipDelay, Copy, Save, Rename, Settings,
+    Snip, SnipDelay, Copy, Save, Pdf, Rename, Settings,
     ZoomOut, ZoomIn, ZoomReset,
     SChk, SDel, SRep, SBody, SCopy, SOcr, DashNew,
     SetBack, SetToggle, SetMinus, SetPlus, SetColor, SetHotkey, SetResetAsk, SetLang, SetAutoCopy, SetNumScope,
@@ -637,6 +639,7 @@ static void DrawToolbar(HDC dc, int cw)
     }
     x = AddCmdButton(dc, x, y, ICO_COPY, TR(S_COPY), HK::Copy, BtnStyle::Subtle, hasTab);
     x = AddCmdButton(dc, x, y, ICO_SAVE, TR(S_SAVE), HK::Save, BtnStyle::Subtle, hasTab);
+    x = AddCmdButton(dc, x, y, ICO_PDF, TR(S_PDF), HK::Pdf, BtnStyle::Subtle, hasTab);
     x = AddCmdButton(dc, x, y, ICO_RENAME, TR(S_RENAME), HK::Rename, BtnStyle::Subtle, hasTab);
 
     // rechts: Einstellungen, davor die Tab-eigenen Werte (Fuellfarbe, Rand, Abstand)
@@ -2587,6 +2590,132 @@ static void DoSave()
     DeleteObject(c);
 }
 
+// ---------------------------------------------------------------- PDF-Export
+
+enum {
+    IDC_PDF_GRP_PAGES = 200, IDC_PDF_PER, IDC_PDF_ONE,
+    IDC_PDF_GRP_PAPER, IDC_PDF_A4, IDC_PDF_IMG, IDC_PDF_NOTE
+};
+
+// Auswahl des Dialogs; er laeuft modal und nur einmal, darum reicht ein Static.
+static int g_pdfPages = 0;
+static int g_pdfPaper = 0;
+
+static INT_PTR CALLBACK PdfDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM)
+{
+    switch (msg) {
+    case WM_INITDIALOG:
+        // Beschriftungen stehen schon in der Vorlage; hier nur der Zustand.
+        CheckRadioButton(dlg, IDC_PDF_PER, IDC_PDF_ONE, g_pdfPages == 1 ? IDC_PDF_ONE : IDC_PDF_PER);
+        CheckRadioButton(dlg, IDC_PDF_A4, IDC_PDF_IMG, g_pdfPaper == 1 ? IDC_PDF_IMG : IDC_PDF_A4);
+        {
+            BOOL dark = g_dark ? TRUE : FALSE;
+            DwmSetWindowAttribute(dlg, 20, &dark, sizeof(dark));
+        }
+        return TRUE;
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDOK) {
+            g_pdfPages = IsDlgButtonChecked(dlg, IDC_PDF_ONE) == BST_CHECKED ? 1 : 0;
+            g_pdfPaper = IsDlgButtonChecked(dlg, IDC_PDF_IMG) == BST_CHECKED ? 1 : 0;
+            EndDialog(dlg, 1);
+            return TRUE;
+        }
+        if (LOWORD(wp) == IDCANCEL) { EndDialog(dlg, 0); return TRUE; }
+        break;
+    case WM_CLOSE: EndDialog(dlg, 0); return TRUE;
+    }
+    return FALSE;
+}
+
+// true, wenn der Benutzer exportieren will; die Auswahl steht dann in g_pdf*.
+static bool ShowPdfDialog()
+{
+    const short W = 272, H = 160;
+    const short BW = 66;                            // Knopfbreite
+    std::vector<WORD> v;
+    DWORD style = DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
+    v.push_back(LOWORD(style)); v.push_back(HIWORD(style));
+    v.push_back(0); v.push_back(0);                 // Ex-Style
+    v.push_back(9);                                 // Anzahl Elemente
+    v.push_back(0); v.push_back(0); v.push_back(W); v.push_back(H);
+    v.push_back(0); v.push_back(0);                 // Menue, Klasse
+    DlgStr(v, TR(S_PDF_TITLE));
+    v.push_back(9); DlgStr(v, L"Segoe UI");         // DS_SETFONT
+
+    const DWORD kGroup = WS_CHILD | WS_VISIBLE | BS_GROUPBOX;
+    const DWORD kRadio = WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTORADIOBUTTON;
+
+    // WS_GROUP trennt die beiden Radiogruppen voneinander: eine Gruppe reicht
+    // vom Element mit WS_GROUP bis zum naechsten.
+    DlgItem(v, kGroup, 7, 7, W - 14, 48, IDC_PDF_GRP_PAGES, 0x80, TR(S_PDF_PAGES));
+    DlgItem(v, kRadio | WS_GROUP, 14, 21, W - 28, 12, IDC_PDF_PER, 0x80, TR(S_PDF_PER_SNIP));
+    DlgItem(v, kRadio, 14, 37, W - 28, 12, IDC_PDF_ONE, 0x80, TR(S_PDF_SINGLE));
+
+    DlgItem(v, kGroup | WS_GROUP, 7, 60, W - 14, 48, IDC_PDF_GRP_PAPER, 0x80, TR(S_PDF_PAPER));
+    DlgItem(v, kRadio | WS_GROUP, 14, 74, W - 28, 12, IDC_PDF_A4, 0x80, TR(S_PDF_A4));
+    DlgItem(v, kRadio, 14, 90, W - 28, 12, IDC_PDF_IMG, 0x80, TR(S_PDF_IMGSIZE));
+
+    DlgItem(v, WS_CHILD | WS_VISIBLE | WS_GROUP | SS_LEFT, 7, 113, W - 14, 20, IDC_PDF_NOTE, 0x82, TR(S_PDF_NOTE));
+    DlgItem(v, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+        W - 7 - BW - 4 - BW, H - 22, BW, 14, IDOK, 0x80, TR(S_PDF_EXPORT));
+    DlgItem(v, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+        W - 7 - BW, H - 22, BW, 14, IDCANCEL, 0x80, TR(S_CANCEL));
+
+    ModalScope modal;
+    return DialogBoxIndirectParamW(g_hInst, (LPCDLGTEMPLATEW)v.data(), g_hwnd, PdfDlgProc, 0) == 1;
+}
+
+static void DoExportPdf()
+{
+    Tab* t = CurTab();
+    if (!t) return;
+    if (Image_ComputeLayout(*t, false).items.empty()) { Flash(TR(S_NO_VISIBLE_SAVE)); return; }
+
+    g_pdfPages = g_app.def.pdfPages;
+    g_pdfPaper = g_app.def.pdfPaper;
+    if (!ShowPdfDialog()) return;
+
+    // Die Auswahl ist die Vorgabe fuer das naechste Mal.
+    if (g_pdfPages != g_app.def.pdfPages || g_pdfPaper != g_app.def.pdfPaper) {
+        g_app.def.pdfPages = g_pdfPages;
+        g_app.def.pdfPaper = g_pdfPaper;
+        Model_SaveGlobal();
+    }
+
+    PdfOptions o;
+    o.pages = g_pdfPages == 1 ? PdfPages::Single : PdfPages::PerSnippet;
+    o.paper = g_pdfPaper == 1 ? PdfPaper::ImageSize : PdfPaper::A4;
+
+    std::wstring name = t->title;
+    for (auto& ch : name) if (wcschr(L"\\/:*?\"<>|", ch)) ch = L'_';
+    name += L".pdf";
+    if (name.size() >= MAX_PATH) name.resize(MAX_PATH - 1);   // sonst schlaegt wcscpy_s zu
+    wchar_t file[MAX_PATH]{};
+    wcscpy_s(file, name.c_str());
+
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = g_hwnd;
+    std::wstring filter = TR(S_PDF_FILTER);
+    filter.push_back(L'\0');
+    filter += L"*.pdf";
+    filter.push_back(L'\0');
+    ofn.lpstrFilter = filter.c_str();
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"pdf";
+    ofn.lpstrTitle = TR(S_PDF_SAVE_TITLE);
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    BOOL chosen;
+    { ModalScope modal; chosen = GetSaveFileNameW(&ofn); }
+    if (!chosen) return;
+
+    int pageCount = 0;
+    if (Pdf_ExportTab(*t, o, file, &pageCount)) Flash(TRF(S_PDF_SAVED_FMT, file, pageCount));
+    else if (GetLastError() == ERROR_INVALID_PARAMETER) Flash(TR(S_COMPOSITE_TOO_BIG));
+    else ShowSaveError(file, GetLastError());
+}
+
 static void StartRename(int idx)
 {
     if (idx < 0 || idx >= (int)g_app.tabs.size()) return;
@@ -2945,6 +3074,7 @@ static void Activate(const Zone& zc, POINT p, bool kb)
     case HK::SnipDelay: ShowDelayMenu(z->r); break;
     case HK::Copy:     DoCopy(); break;
     case HK::Save:     DoSave(); break;
+    case HK::Pdf:      DoExportPdf(); break;
     case HK::Rename:   StartRename(g_active); break;
     case HK::Settings: g_page = Page::Settings; Redraw(); break;
     case HK::ZoomOut:  SetZoom(g_zoom / 1.25); break;

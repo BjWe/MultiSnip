@@ -79,6 +79,7 @@
     <ClCompile Include="src\Util.cpp" />
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\Image.cpp" />
+    <ClCompile Include="src\Pdf.cpp" />
     <ClCompile Include="src\Annot.cpp" />
     <ClCompile Include="src\Lang.cpp" />
     <ClCompile Include="src\Capture.cpp" />
@@ -89,6 +90,7 @@
     <ClInclude Include="src\Util.h" />
     <ClInclude Include="src\Model.h" />
     <ClInclude Include="src\Image.h" />
+    <ClInclude Include="src\Pdf.h" />
     <ClInclude Include="src\Annot.h" />
     <ClInclude Include="src\Lang.h" />
     <ClInclude Include="src\Capture.h" />

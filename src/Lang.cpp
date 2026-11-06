@@ -219,6 +219,26 @@ static const wchar_t* kStr[S__COUNT][3] = {
         L"Nummer ändern – auch mit + und − auf der Tastatur",
         L"Change the number – + and − on the keyboard work too",
         L"Cambiar el número: también con + y − en el teclado" },
+    /* S_PDF        */ { L"PDF", L"PDF", L"PDF" },
+    /* S_PDF_TITLE  */ { L"Als PDF exportieren", L"Export as PDF", L"Exportar como PDF" },
+    /* S_PDF_PAGES  */ { L"Seiten", L"Pages", L"Páginas" },
+    /* S_PDF_PER_SNIP */ { L"Ein Ausschnitt pro Seite", L"One snippet per page", L"Un recorte por página" },
+    /* S_PDF_SINGLE */ { L"Alles auf eine Seite", L"Everything on one page", L"Todo en una página" },
+    /* S_PDF_PAPER  */ { L"Seitenformat", L"Page format", L"Formato de página" },
+    /* S_PDF_A4     */ { L"A4, Bild eingepasst", L"A4, image fitted", L"A4, imagen ajustada" },
+    /* S_PDF_IMGSIZE */ { L"Seite in Bildgröße", L"Page in image size", L"Página del tamaño de la imagen" },
+    /* S_PDF_NOTE   */ {
+        L"A4 passt das Bild mit 10 mm Rand ein, Querformat automatisch. Bildgröße nimmt die Pixel 1:1 (96 dpi).",
+        L"A4 fits the image with a 10 mm margin, landscape automatically. Image size takes the pixels 1:1 (96 dpi).",
+        L"A4 ajusta la imagen con 10 mm de margen, horizontal automático. Tamaño de imagen toma los píxeles 1:1 (96 ppp)." },
+    /* S_PDF_EXPORT */ { L"Exportieren", L"Export", L"Exportar" },
+    /* S_CANCEL     */ { L"Abbrechen", L"Cancel", L"Cancelar" },
+    /* S_PDF_FILTER */ { L"PDF-Dokument", L"PDF document", L"Documento PDF" },
+    /* S_PDF_SAVE_TITLE */ { L"Als PDF speichern", L"Save as PDF", L"Guardar como PDF" },
+    /* S_PDF_SAVED_FMT */ {
+        L"Gespeichert: %s   ·   %d Seite(n)",
+        L"Saved: %s   ·   %d page(s)",
+        L"Guardado: %s   ·   %d página(s)" },
 };
 
 static Lang g_sel = Lang::Auto;
